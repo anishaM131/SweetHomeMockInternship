@@ -37,11 +37,7 @@ import java.awt.print.PrinterException;
 import java.awt.print.PrinterJob;
 import java.security.AccessControlException;
 import java.text.MessageFormat;
-import java.util.Date;
-import java.util.HashSet;
-import java.util.MissingResourceException;
-import java.util.ResourceBundle;
-import java.util.Set;
+import java.util.*;
 
 import javax.swing.JComponent;
 import javax.swing.JLabel;
@@ -186,7 +182,12 @@ public class HomePrintableComponent extends JComponent implements Printable {
     if (Thread.interrupted()) {
       throw new InterruptedPrinterException();
     }
-    
+
+    //grab starting level, as well as make a list of all levels that are viewable
+    final Level initialLevel = this.home.getSelectedLevel();
+    final List<HomePieceOfFurniture.SortableProperty> initialVisibleProperties =
+            new ArrayList<HomePieceOfFurniture.SortableProperty>(this.home.getFurnitureVisibleProperties());
+
     Graphics2D g2D = (Graphics2D)g;
     g2D.setFont(this.defaultFont);
     g2D.setColor(Color.WHITE);
@@ -377,13 +378,20 @@ public class HomePrintableComponent extends JComponent implements Printable {
         this.furniturePageCount++;
       }
     }
-    if (pageExists == NO_SUCH_PAGE 
-        && planView != null 
-        && (homePrint == null || homePrint.isPlanPrinted())) {
-      // Try to print next plan view page
-      pageExists = ((Printable)planView).print(g2D, pageFormat, page - this.furniturePageCount);
+    if (pageExists == NO_SUCH_PAGE
+            && planView != null
+            && (homePrint == null || homePrint.isPlanPrinted())) {
+      int planPageIndex = page - this.furniturePageCount;
+      List<Level> viewableLevels = getViewableLevels();
+      if (viewableLevels.isEmpty()) {
+        // edge case: single level home with no level objects
+        pageExists = ((Printable)planView).print(g2D, pageFormat, planPageIndex);
+      } else if (planPageIndex >= 0 && planPageIndex < viewableLevels.size()) {
+        this.home.setSelectedLevel(viewableLevels.get(planPageIndex));
+        pageExists = ((Printable)planView).print(g2D, pageFormat, 0);
+      }
       if (pageExists == PAGE_EXISTS
-          && !this.printablePages.contains(page)) {
+              && !this.printablePages.contains(page)) {
         this.printablePages.add(page);
         this.planPageCount++;
       }
@@ -424,6 +432,19 @@ public class HomePrintableComponent extends JComponent implements Printable {
     }  
     pageFormat.setPaper(oldPaper);    
     return pageExists;
+  }
+
+  /**
+   * Returns a list of the levels that are viewable
+   */
+  private List<Level> getViewableLevels() {
+    List<Level> viewableLevels = new ArrayList<Level>();
+    for (Level level : this.home.getLevels()) {
+      if (level.isViewable()) {
+        viewableLevels.add(level);
+      }
+    }
+    return viewableLevels;
   }
 
   /**
